@@ -33,7 +33,7 @@ class ConvModelDataSet(DatasetBasicABC):
 
         # cv2.imshow("", img)
         # cv2.waitKey()
-        return torchvision.transforms.functional.to_tensor(img)
+        return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
 
 
 class LinearModelDataSet(DatasetBasicABC):
@@ -54,7 +54,7 @@ class LinearModelDataSet(DatasetBasicABC):
         # cv2.imshow("", img)
         # cv2.waitKey()
         out = torchvision.transforms.functional.to_tensor(img).flatten()
-        return out
+        return entry["screenshot"], out
     
 
 def load_data(data_path):
