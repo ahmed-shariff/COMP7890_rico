@@ -13,10 +13,21 @@ np.random.seed(100)
 random.seed(100)
 torch.manual_seed(100)
 
-class ConvModelDataSet(DatasetBasicABC):
-    def __init__(self, *args, **kwargs):
+class RicoDataSetABC(DatasetBasicABC):
+    def __init__(self, flat=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
+        self.flat = flat
+
+    def _assign_area(self, img, view, x1, y1, x2, y2):
+        if self.flat or "Text" not in view["class"]:
+            img[y1:y2, x1:x2] = 255
+        else:
+            img[y1:y2, x1:x2] = 127
+
+        return img
+
+        
+class ConvModelDataSet(RicoDataSetABC):
     def __getitem__(self, idx):
         entry = self.current_data.iloc[idx]
         img = np.zeros((256, 144), dtype=np.uint8)  # 2560x1440 divided by 20
@@ -26,7 +37,7 @@ class ConvModelDataSet(DatasetBasicABC):
             # else:
             #     color = (255, 0, 255)
             x1, y1, x2, y2 = (np.array(view["bounds"]) / 10).round().astype(np.int)
-            img[y1:y2, x1:x2] = 255
+            img = self._assign_area(img, view, x1, y1, x2, y2)
             # print(x1, y1, x2, y2)
             # print(view["focusable"])
             # cv2.rectangle(img, (x1, y1), (x2, y2), color, 5)
@@ -36,7 +47,7 @@ class ConvModelDataSet(DatasetBasicABC):
         return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
 
 
-class LinearModelDataSet(DatasetBasicABC):
+class LinearModelDataSet(RicoDataSetABC):
     def __getitem__(self, idx):
         entry = self.current_data.iloc[idx]
         img = np.zeros((128, 72), dtype=np.uint8)  # 2560x1440 divided by 10
@@ -46,7 +57,7 @@ class LinearModelDataSet(DatasetBasicABC):
             # else:
             #     color = (255, 0, 255)
             x1, y1, x2, y2 = (np.array(view["bounds"]) / 20).round().astype(np.int)
-            img[y1:y2, x1:x2] = 255
+            img = self._assign_area(img, view,  x1, y1, x2, y2)
             # print(x1, y1, x2, y2)
             # print(view["focusable"])
             # cv2.rectangle(img, (x1, y1), (x2, y2), color, 5)

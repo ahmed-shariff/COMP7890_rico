@@ -20,7 +20,7 @@ class Experiment(BaseTorchExperimentABC):
         self.model = self.current_version.model()
 
         # pre-execution hook?
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.01)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.005)
         self.criterion = torch.nn.MSELoss()
 
         self.model = self.model.cuda()
@@ -75,8 +75,16 @@ class Experiment(BaseTorchExperimentABC):
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
 
-    # def evaluate_loop(self, input_fn, **kwargs):
-    #     return MetricContainer()
+    def evaluate_loop(self, input_fn, **kwargs):
+        metricContainer = MetricContainer(["loss"])
+        self.model.eval()
+
+        for idx, (name, i) in iterator(enumerate(input_fn), 20):
+            i = i.cuda()
+            out = self.model(i)
+            loss = self.criterion(out, i)
+            metricContainer.loss.update(loss.item(), 1)
+        return metricContainer
 
     # def export_model(self, **kwargs):
     #     pass
@@ -113,29 +121,23 @@ class Experiment(BaseTorchExperimentABC):
             np.save(f, test_encodings)
 
 
+def add_version(name, model, dataset, flat):
+    v.add_version(name,
+                  model=model,
+                  dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
+                                                       datasets=Datasets("../data/generated/rico.json",
+                                                                         train_data_load_function=load_data,
+                                                                         test_size=0.1,
+                                                                         validation_size=0),
+                                                       pytorch_dataset_factory=DatasetFactory(dataset, flat=flat),
+                                                       batch_size=120),
+                  epocs=500)
+
+
 
 v = Versions()
-# v.add_version("Run-1",
-#               model=ConvRicoAE,
-#               dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
-#                                                    datasets=Datasets("../data/generated/rico.json",
-#                                                                      train_data_load_function=load_data,
-#                                                                      test_size=0.05,
-#                                                                      validation_size=0),
-#                                                    pytorch_dataset_factory=DatasetFactory(ConvModelDataSet),
-#                                                    batch_size=5),
-#               epocs=100)
-
-v.add_version("Run-1",
-              model=LinearRicoAE,
-              dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
-                                                   datasets=Datasets("../data/generated/rico.json",
-                                                                     train_data_load_function=load_data,
-                                                                     test_size=0.05,
-                                                                     validation_size=0),
-                                                   pytorch_dataset_factory=DatasetFactory(LinearModelDataSet),
-                                                   batch_size=5),
-              epocs=100)
-
-
-EXPERIMENT = Experiment(v)
+add_version("linear-flat", LinearRicoAE, LinearModelDataSet, flat=True)
+add_version("conv-flat", ConvRicoAE, ConvModelDataSet, flat=True)
+add_version("linear-non-flat", LinearRicoAE, LinearModelDataSet, flat=False)
+add_version("conv-non-flat", ConvRicoAE, ConvModelDataSet, flat=False)
+EXPERIMENT = Experiment(v, allow_delete_experiment_dir=True)
