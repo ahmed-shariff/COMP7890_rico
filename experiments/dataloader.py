@@ -70,3 +70,12 @@ class LinearModelDataSet(RicoDataSetABC):
 
 def load_data(data_path):
     return pd.read_json(data_path), []
+
+
+def imshow_tensor(t):
+    if len(t.shape) != 4:
+        t = t.view(-1, 128, 72)
+    img = random.choices([(_t.cpu().detach().numpy() * 255).clip(0, 255).astype(np.uint8).squeeze() for _t in t], k=5)
+    img = np.concatenate(img, axis=1)
+    cv2.imshow("", img)
+    cv2.waitKey(10)

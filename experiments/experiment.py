@@ -10,7 +10,7 @@ from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 
-from dataloader import ConvModelDataSet, LinearModelDataSet, load_data
+from dataloader import ConvModelDataSet, LinearModelDataSet, load_data, imshow_tensor
 from models import LinearRicoAE, ConvRicoAE
 
 
@@ -20,7 +20,7 @@ class Experiment(BaseTorchExperimentABC):
         self.model = self.current_version.model()
 
         # pre-execution hook?
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.005)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = torch.nn.MSELoss()
 
         self.model = self.model.cuda()
@@ -40,9 +40,9 @@ class Experiment(BaseTorchExperimentABC):
 
         self.model.train()
 
-        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end, 1)):
+        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end)):
             metricContainer.reset_epoch()
-            for idx, (name, i) in iterator(enumerate(input_fn), 20):
+            for idx, (name, i) in iterator(enumerate(input_fn), 200):
                 i = i.cuda()
                 out = self.model(i)
                 loss = self.criterion(out, i)
@@ -52,7 +52,8 @@ class Experiment(BaseTorchExperimentABC):
 
                 metricContainer.loss.update(loss.item(), 1)
 
-                if idx % self.logging_iteration == 0:
+                if idx % 100 == 0:
+                    imshow_tensor(out)
                     out_string_step = "Epoch: {}  Step: {}".format(
                         epoch + 1,
                         idx + 1)
@@ -127,11 +128,11 @@ def add_version(name, model, dataset, flat):
                   dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
                                                        datasets=Datasets("../data/generated/rico.json",
                                                                          train_data_load_function=load_data,
-                                                                         test_size=0.1,
+                                                                         test_size=0.3,
                                                                          validation_size=0),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, flat=flat),
                                                        batch_size=120),
-                  epocs=500)
+                  epocs=50)
 
 
 
