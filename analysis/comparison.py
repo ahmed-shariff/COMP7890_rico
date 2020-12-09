@@ -9,14 +9,16 @@ from mlpipeline import MetricContainer, iterator
 from mlpipeline.utils import set_logger
 from tqdm import tqdm
 from repcomp.comparison import CCAComparison, NeighborsComparison
+import multiprocessing
 
 set_logger()
 
 export_dirs = [
+    "linear-flat",
+    "linear-non-flat",
     "conv-flat",
     # "conv-non-flat",
-    "linear-flat",
-    "linear-non-flat"]
+]
 
 def main():
     export_roots = [Path("../exports") / d for d in export_dirs]
@@ -28,29 +30,27 @@ def main():
         # comparator = CCAComparison()
         # sim = comparator.run_comparison(train_data.vectors[:50], ui_layout_vector.vectors[:50])
         # print(sim)
-        for name, idx in tqdm(iterator(train_data.name_to_idx.items(), None), total=len(train_data.name_to_idx)):
-            train_d, train_i = train_data.tree.query([train_data.vectors[idx]], k=20)
-            train_results = [train_data.idx_to_name[i] for i in train_i[0]]
+        if "conv" in str(root_dir):
+            n_proc = 2
+        else:
+            n_proc = 7
+        with multiprocessing.Pool(n_proc) as p:
+            if "conv" in str(root_dir):
+                map_fn = lambda p, i: map(p, i)
+            else:
+                map_fn = lambda pr, i: p.imap_unordered(pr, i, chunksize=100)
 
-            try:
-                ui_idx = ui_layout_vector.name_to_idx[name]
-                ui_d, ui_i= ui_layout_vector.tree.query([ui_layout_vector.vectors[ui_idx]], k=20)
-                ui_results = [ui_layout_vector.idx_to_name[i] for i in ui_i[0]]
-            except KeyError:
-                mc.skipped.update(1)
-                continue
-            mc.skipped.update(0)
-            # print("ui")
-            # _display_images(name, *ui_results)
-            # print("train")
-            # _display_images(name, *train_results)
-            
-            # print(train_results)
-            # print(ui_results)
-
-            mc.precision.update(_precision(ui_results, train_results))
-            mc.recall.update(_recall(ui_results, train_results))
-            mc.dcg.update(_dcg(ui_results, train_results))
+            print(map_fn, n_proc)
+            for out in tqdm(map_fn(_process(train_data, ui_layout_vector), iterator(train_data.name_to_idx.items(), None)), total=len(train_data.name_to_idx)):
+                precision, recall, dcg, skipped = out
+                if skipped:
+                    mc.skipped.update(1)
+                    continue
+                else:
+                    mc.skipped.update(0)
+                    mc.precision.update(precision)
+                    mc.recall.update(recall)
+                    mc.dcg.update(dcg)
 
         #     break
         # break
@@ -61,6 +61,34 @@ def main():
     #     break
 
 
+
+class _process:
+    def __init__(self, train_data, ui_layout_vector):
+        self.train_data = train_data
+        self.ui_layout_vector = ui_layout_vector
+
+    def __call__(self, x):
+        name, idx = x
+        train_d, train_i = self.train_data.tree.query([self.train_data.vectors[idx]], k=20)
+        train_results = [self.train_data.idx_to_name[i] for i in train_i[0]]
+
+        try:
+            ui_idx = self.ui_layout_vector.name_to_idx[name]
+            ui_d, ui_i= self.ui_layout_vector.tree.query([self.ui_layout_vector.vectors[ui_idx]], k=20)
+            ui_results = [self.ui_layout_vector.idx_to_name[i] for i in ui_i[0]]
+            # print("ui")
+            # _display_images(name, *ui_results)
+            # print("train")
+            # _display_images(name, *train_results)
+            
+            # print(train_results)
+            # print(ui_results)
+        except KeyError:
+            return None, None, None, True
+
+        return _precision(ui_results, train_results), _recall(ui_results, train_results), _dcg(ui_results, train_results), False
+
+        
 def _precision(ui_results, train_results):
     return len(set(train_results).intersection(ui_results))/len(train_results)
 
