@@ -16,7 +16,7 @@ set_logger()
 export_dirs = [
     "linear-flat",
     "linear-non-flat",
-    "conv-flat",
+    # "conv-flat",
     # "conv-non-flat",
 ]
 
@@ -26,40 +26,52 @@ def main():
     for root_dir in export_roots:  # (export_roots[2], ):
         train_data = get_trained_data(root_dir)
         ui_layout_vector = get_ui_layout(train_data)
-        mc = MetricContainer(["precision", "recall", "dcg", "skipped"])
-        # comparator = CCAComparison()
-        # sim = comparator.run_comparison(train_data.vectors[:50], ui_layout_vector.vectors[:50])
-        # print(sim)
-        if "conv" in str(root_dir):
-            n_proc = 2
-        else:
-            n_proc = 7
-        with multiprocessing.Pool(n_proc) as p:
-            if "conv" in str(root_dir):
-                map_fn = lambda p, i: map(p, i)
-            else:
-                map_fn = lambda pr, i: p.imap_unordered(pr, i, chunksize=100)
 
-            print(map_fn, n_proc)
-            for out in tqdm(map_fn(_process(train_data, ui_layout_vector), iterator(train_data.name_to_idx.items(), None)), total=len(train_data.name_to_idx)):
-                precision, recall, dcg, skipped = out
-                if skipped:
-                    mc.skipped.update(1)
-                    continue
-                else:
-                    mc.skipped.update(0)
-                    mc.precision.update(precision)
-                    mc.recall.update(recall)
-                    mc.dcg.update(dcg)
+        _compare_data(ui_layout_vector, train_data, root_dir)
 
-        #     break
-        # break
-        mc.log_metrics()
-    
+    print("**********************************************************\n")
+    print(f"{export_roots[0]} -> {export_roots[1]}")
+    _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), root_dir)
+
+    print("**********************************************************\n")
+    print(f"{export_roots[1]} -> {export_roots[0]}")
+    _compare_data(get_trained_data(export_roots[1]), get_trained_data(export_roots[0]), root_dir)
+
     # for name, idx in ui_layout_vector.name_to_idx:
     #     print(name, idx)
     #     break
 
+
+def _compare_data(gt_data, predicted_data, root_dir):
+    mc = MetricContainer(["precision", "recall", "dcg", "skipped"])
+    # comparator = CCAComparison()
+    # sim = comparator.run_comparison(train_data.vectors[:50], ui_layout_vector.vectors[:50])
+    # print(sim)
+    if "conv" in str(root_dir):
+        n_proc = 2
+    else:
+        n_proc = 7
+    with multiprocessing.Pool(n_proc) as p:
+        if "conv" in str(root_dir):
+            map_fn = lambda p, i: map(p, i)
+        else:
+            map_fn = lambda pr, i: p.imap_unordered(pr, i, chunksize=100)
+
+        print(map_fn, n_proc)
+        for out in tqdm(map_fn(_process(predicted_data, gt_data), iterator(predicted_data.name_to_idx.items(), None)), total=len(predicted_data.name_to_idx)):
+            precision, recall, dcg, skipped = out
+            if skipped:
+                mc.skipped.update(1)
+                continue
+            else:
+                mc.skipped.update(0)
+                mc.precision.update(precision)
+                mc.recall.update(recall)
+                mc.dcg.update(dcg)
+
+    #     break
+    # break
+    mc.log_metrics()
 
 
 class _process:
