@@ -14,7 +14,7 @@ import multiprocessing
 set_logger()
 
 export_dirs = [
-    "linear-flat",
+    # "linear-flat",
     "linear-non-flat",
     # "conv-flat",
     # "conv-non-flat",
@@ -31,11 +31,11 @@ def main():
 
     print("**********************************************************\n")
     print(f"{export_roots[0]} -> {export_roots[1]}")
-    _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), root_dir)
+    _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), export_roots[1])
 
     print("**********************************************************\n")
     print(f"{export_roots[1]} -> {export_roots[0]}")
-    _compare_data(get_trained_data(export_roots[1]), get_trained_data(export_roots[0]), root_dir)
+    _compare_data(get_trained_data(export_roots[1]), get_trained_data(export_roots[0]), export_roots[0])
 
     # for name, idx in ui_layout_vector.name_to_idx:
     #     print(name, idx)

@@ -58,16 +58,18 @@ class ProcessEntry:
             # h_factor = img.shape[0] / 2560
             # w_factor = img.shape[1] / 1440
             # for view in ui_leaf_views:
-            #     if not view["visibility"] == "visible":
+            #     x1, y1, x2, y2 = (np.array(view["bounds"]) * [w_factor, h_factor, w_factor, h_factor]).round().astype(np.int)
+            #     if "Text" in view["class"]: # view["visibility"] == "visible":
             #         color = (255, 0, 0)
             #     else:
-            #         color = (255, 0, 255)
-            #     x1, y1, x2, y2 = (np.array(view["bounds"]) * [w_factor, h_factor, w_factor, h_factor]).round().astype(np.int)
+            #         color = (0, 0, 255)
+
+            #     cv2.rectangle(img, (x1, y1), (x2, y2), color, 5)
             #     print(x1, y1, x2, y2)
             #     print(view["class"], "----" if "text" not in view else view["text"])
-            #     cv2.rectangle(img, (x1, y1), (x2, y2), color, 5)
-            #     cv2.imshow("", img)
-            #     cv2.waitKey()
+                
+            # cv2.imshow("", img)
+            # cv2.waitKey()
 
             # entry["ui_leaf_views"] = ui_leaf_views
             # entry["ui_data"] = ui_data
