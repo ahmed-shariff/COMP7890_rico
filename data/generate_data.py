@@ -27,14 +27,36 @@ def construct_rico_auto_encoder_data():
     #     data.append(entry)
 
     with multiprocessing.Pool(20) as p:
-        ui_data_elements = list(ui_data_path.glob("*.jpg"))# [:10]
-        data = list(tqdm(p.imap_unordered(ProcessEntry(semantic_annotations_path, ui_data_path), ui_data_elements), total=len(ui_data_elements)))
+        ui_data_elements = list(ui_data_path.glob("*.jpg"))[:1000]
+        data = []
+        color = set([])
+        for entry, c in tqdm(p.imap_unordered(ProcessEntry(semantic_annotations_path, ui_data_path), ui_data_elements, chunksize=1), total=len(ui_data_elements)):
+            data.append(entry)
+            # for cn in set(list(color.keys())).intersection(list(c.keys())):
+            #     assert color[cn] == c[cn], str(color[cn]) + "  " + str(c[cn]) + f"     {cn}"
+            # color.update(c)
+            for cn in c.keys():
+                color.add(cn)
 
     data_dir = data_directory / "generated"
     if not data_dir.exists():
         data_dir.mkdir(exist_ok=True)
     with open(data_dir / "rico.json", "w") as f:
         json.dump(data, f) # , indent=2)
+
+    with open(data_dir / "semnantic_colors.json", "w") as f:
+        out_color = {}
+        for c, i in color:
+            try:
+                out_color[c].add(i)
+            except KeyError:
+                out_color[c] = set()
+                out_color[c].add(i)
+        for c in out_color.keys():
+            out_color[c] = list(out_color[c])
+            print(c, len(out_color[c]))
+        print(len(out_color))
+        json.dump(out_color, f, indent=2)
 
 
 class ProcessEntry:
@@ -79,9 +101,11 @@ class ProcessEntry:
                                                "class": view["class"]})
             entry["ui_leaf_views"] = ui_leaf_views_filtered
 
-        # with open(self.semantic_annotations_path / (name + ".json")) as f:
-        #     entry["semantic_data"] = json.load(f)
-        return entry
+        with open(self.semantic_annotations_path / (name + ".json")) as f:
+            file_content = json.load(f)
+            entry["semantic_data"], _, colors = _get_component_views(file_content, [], 0, {}, str(self.semantic_annotations_path / (name + ".png")))
+            # print(json.dumps(entry["semantic_data"], indent=2), len(entry["semantic_data"]))
+        return entry, colors
 
 
 def _get_leaf_views(el, leaf_els, total_count):
@@ -97,6 +121,38 @@ def _get_leaf_views(el, leaf_els, total_count):
         leaf_els, total_count = _get_leaf_views(child_el, leaf_els, total_count)
 
     return leaf_els, total_count
+
+
+def _get_component_views(el, component_els, total_count, colors, img_path):
+    total_count += 1
+    if el is None:
+        return component_els, total_count, colors
+
+    if "componentLabel" in el:
+        _el = el.copy()
+        if "children" in _el:
+            del _el["children"]
+        component_els.append(_el)
+        if el["componentLabel"] not in colors:
+            component_name = (el["componentLabel"], None)
+            if component_name[0] == "Icon":
+                component_name = ("Icon",  el["iconClass"])
+            elif component_name[0] == "Text Button":
+                if "textButtonClass" not in el:
+                    component_name = ("Text Button", "misc_text")
+                else:
+                    component_name = ("Text Button", el["textButtonClass"])
+                
+            # im = cv2.resize(cv2.imread(img_path), (1440, 2560))
+            # y, x = el["bounds"][1] + 3, el["bounds"][0] + 3
+            colors[component_name] = None #  im[y, x].tolist()
+            
+
+    if "children" in el:
+        for child_el in el["children"]:
+            component_els, total_count, colors = _get_component_views(child_el, component_els, total_count, colors, img_path)
+
+    return component_els, total_count, colors
 
         
 if __name__ == "__main__":
