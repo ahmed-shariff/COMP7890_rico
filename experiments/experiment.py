@@ -10,7 +10,13 @@ from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 
-from dataloader import ConvModelDataSet, LinearModelDataSet, load_data, imshow_tensor
+from dataloader import (ConvModelDataSet,
+                        LinearModelDataSet,
+                        load_data,
+                        imshow_tensor,
+                        SemanticConvModelDataSet,
+                        FLAT_USED_LABELS,
+                        SEMANTIC_USED_LABELS)
 from models import LinearRicoAE, ConvRicoAE
 
 
@@ -122,15 +128,17 @@ class Experiment(BaseTorchExperimentABC):
             np.save(f, test_encodings)
 
 
-def add_version(name, model, dataset, flat):
+
+def add_version(name, model, dataset, flat, used_labels):
     v.add_version(name,
                   model=model,
                   dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
-                                                       datasets=Datasets("../data/generated/rico.json",
+                                                       datasets=Datasets("../data/generated/rico_temp.json",
                                                                          train_data_load_function=load_data,
                                                                          test_size=0.3,
-                                                                         validation_size=0),
-                                                       pytorch_dataset_factory=DatasetFactory(dataset, flat=flat),
+                                                                         validation_size=0,
+                                                                         used_labels=used_labels),
+                                                       pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels, flat=flat),
                                                        batch_size=120),
                   epocs=50)
 
