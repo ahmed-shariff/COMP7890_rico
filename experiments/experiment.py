@@ -9,6 +9,7 @@ import torch
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
+import shutil
 
 from dataloader import (ConvModelDataSet,
                         LinearModelDataSet,
@@ -16,7 +17,7 @@ from dataloader import (ConvModelDataSet,
                         imshow_tensor,
                         SemanticConvModelDataSet,
                         FLAT_USED_LABELS,
-                        SEMANTIC_USED_LABELS)
+                        load_semantic_labels)
 from models import LinearRicoAE, ConvRicoAE
 
 
@@ -46,7 +47,7 @@ class Experiment(BaseTorchExperimentABC):
 
         self.model.train()
 
-        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end)):
+        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 2):
             metricContainer.reset_epoch()
             for idx, (name, i) in iterator(enumerate(input_fn), 200):
                 i = i.cuda()
@@ -59,7 +60,7 @@ class Experiment(BaseTorchExperimentABC):
                 metricContainer.loss.update(loss.item(), 1)
 
                 if idx % 100 == 0:
-                    imshow_tensor(out)
+                    imshow_tensor(out, i.shape)
                     out_string_step = "Epoch: {}  Step: {}".format(
                         epoch + 1,
                         idx + 1)
@@ -127,6 +128,9 @@ class Experiment(BaseTorchExperimentABC):
         with open(out_location / "test_encodings.npy", "wb") as f:
             np.save(f, test_encodings)
 
+    def clean_experiment_dir(self, model_dir):
+        self.log("CLEANING MODEL DIR")
+        shutil.rmtree(model_dir, ignore_errors=True)
 
 
 def add_version(name, model, dataset, flat, used_labels):
@@ -135,18 +139,21 @@ def add_version(name, model, dataset, flat, used_labels):
                   dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
                                                        datasets=Datasets("../data/generated/rico_temp.json",
                                                                          train_data_load_function=load_data,
-                                                                         test_size=0.3,
+                                                                         test_size=0.1,
                                                                          validation_size=0,
                                                                          used_labels=used_labels),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels, flat=flat),
                                                        batch_size=120),
-                  epocs=50)
+                  epocs=75)
 
 
 
 v = Versions()
-add_version("linear-flat", LinearRicoAE, LinearModelDataSet, flat=True)
-add_version("conv-flat", ConvRicoAE, ConvModelDataSet, flat=True)
-add_version("linear-non-flat", LinearRicoAE, LinearModelDataSet, flat=False)
-add_version("conv-non-flat", ConvRicoAE, ConvModelDataSet, flat=False)
+add_version("linear-flat", LinearRicoAE, LinearModelDataSet, flat=True, used_labels=FLAT_USED_LABELS)
+add_version("conv-flat", ConvRicoAE, ConvModelDataSet, flat=True, used_labels=FLAT_USED_LABELS)
+add_version("linear-non-flat", LinearRicoAE, LinearModelDataSet, flat=False, used_labels=FLAT_USED_LABELS)
+add_version("conv-non-flat", ConvRicoAE, ConvModelDataSet, flat=False, used_labels=FLAT_USED_LABELS)
+# add_version("r1", ConvRicoAE, SemanticConvModelDataSet, flat=False, used_labels=load_semantic_labels("../data/generated/semnantic_colors.json"))
+add_version("conv-flat-semantic", ConvRicoAE, SemanticConvModelDataSet, flat=True, used_labels=load_semantic_labels("../data/generated/semnantic_colors.json"))
+add_version("conv-non-flat-semantic", ConvRicoAE, SemanticConvModelDataSet, flat=False, used_labels=load_semantic_labels("../data/generated/semnantic_colors.json"))
 EXPERIMENT = Experiment(v, allow_delete_experiment_dir=True)
