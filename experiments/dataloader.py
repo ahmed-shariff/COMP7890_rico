@@ -1,3 +1,4 @@
+from mlpipeline import log
 from mlpipeline.base import DataLoaderABC
 from mlpipeline.utils import Datasets
 import pandas as pd
@@ -25,8 +26,11 @@ class RicoDataSetABC(DatasetBasicABC):
         self.flat = flat
         self._used_labels = used_labels
 
-    def _assign_area(self, img, view, x1, y1, x2, y2):
-        img[y1:y2, x1:x2] = self._get_color(view)
+    def _assign_area(self, img, view, x1, y1, x2, y2, rectangle=False):
+        if not rectangle:
+            img[y1:y2, x1:x2] = self._get_color(view)
+        else:
+            cv2.rectangle(img, (x1, y1), (x2, y2), self._get_color(view), 1)
         return img
 
 
@@ -119,6 +123,46 @@ class LinearModelDataSet(FlatRicolDataSet):
         return entry["screenshot"], out
     
 
+class ObjectDetectionModelDataSet(SemanticConvModelDataSet):
+    def _get_color(self, view):
+        label = view["componentLabel"]
+        c = self._used_labels[label] * 2
+        return (c, c, c)
+        
+    def __getitem__(self, idx):
+        entry = self.current_data.iloc[idx]
+        # img = np.zeros((256, 144, 3), dtype=np.uint8)  # 2560x1440 divided by 20
+        img = cv2.imread("../data/" + entry["screenshot"])
+        img = cv2.resize(img, (144, 256))
+        targets = {}
+        boxes = []
+        labels = []
+        for view in entry["semantic_data"]:
+            boxes.append((torch.tensor(view["bounds"]) / 10).round().type(torch.int64))
+            labels.append(self._used_labels[view["componentLabel"]])
+            # x1, y1, x2, y2 = (torch.tensor(view["bounds"]) / 10).round().type(torch.int32)
+            # img = self._assign_area(img, view, x1, y1, x2, y2, True)
+            # print(x1, y1, x2, y2)
+            # print(view["focusable"])
+            # cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 5)
+            # cv2.imshow("", img)
+            # cv2.waitKey()
+        targets["boxes"] = torch.stack(boxes).cuda()
+        targets["labels"] = torch.tensor(labels).type(torch.int64).cuda()
+
+        # img = cv2.imread("../data/" + entry["screenshot"])
+        # img = cv2.resize(img, (144, 256))
+        # for view, (x1, y1, x2, y2) in zip(entry["semantic_data"], boxes):
+        #     img = self._assign_area(img, view, x1, y1, x2, y2, True)
+
+        #     cv2.imshow("", img)
+        #     cv2.waitKey()
+        return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), targets
+
+    def collate_fn(self, batch):
+        return list(zip(*batch))
+
+    
 def load_data(data_path):
     return pd.read_json(data_path), []
 
@@ -161,4 +205,16 @@ def load_semantic_labels(path):
                 sub_category_coding[sub_category] = sub_val
 
             label_coding[label] = sub_category_coding
+    return label_coding
+
+def load_semantic_classes(path):
+    with open(path) as f:
+        labels = json.load(f)
+
+    label_coding = {}
+    for idx, label in enumerate(labels.keys()):
+        label_coding[label] = idx
+
+    
+    log("labels used:  {}".format(label_coding))
     return label_coding

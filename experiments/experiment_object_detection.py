@@ -11,19 +11,17 @@ from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 import shutil
-from dataloader import (ConvModelDataSet,
-                        LinearModelDataSet,
+from dataloader import (ObjectDetectionModelDataSet,
                         load_data,
                         imshow_tensor,
-                        SemanticConvModelDataSet,
-                        FLAT_USED_LABELS,
-                        load_semantic_labels)
+                        load_semantic_classes)
 
 
 class Experiment(BaseTorchExperimentABC):
     def setup_model(self):
         super().setup_model()
         self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained_backbone=True, num_classes=self.current_version.num_classes)
+        self.metrics = ['loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg']
 
         # pre-execution hook?
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
@@ -31,8 +29,8 @@ class Experiment(BaseTorchExperimentABC):
         self.model = self.model.cuda()
         self.lr_scheduler = None
 
-    def _train_loop(self, input_fn, **kwargs):
-        metricContainer = MetricContainer(["loss"])
+    def train_loop(self, input_fn, **kwargs):
+        metricContainer = MetricContainer(self.metrics)
         
         epochs = self.current_version.epocs
         self.log("Epochs: {}".format(epochs))
@@ -47,18 +45,17 @@ class Experiment(BaseTorchExperimentABC):
 
         for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 2):
             metricContainer.reset_epoch()
-            for idx, (name, i) in iterator(enumerate(input_fn), 200):
-                i = i.cuda()
-                out = self.model(i)
-                loss = self.criterion(out, i)
+            for idx, (name, i, targets) in iterator(enumerate(input_fn), 200):
+                i = torch.stack(i).cuda()
+                out = self.model(i, targets=targets)
+                loss = sum(list(out.values()))
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
-                metricContainer.loss.update(loss.item(), 1)
+                metricContainer.update({k: v.item() for k, v in out.items()}, 1)
 
                 if idx % 100 == 0:
-                    imshow_tensor(out, i.shape)
                     out_string_step = "Epoch: {}  Step: {}".format(
                         epoch + 1,
                         idx + 1)
@@ -80,16 +77,17 @@ class Experiment(BaseTorchExperimentABC):
                                         step=epoch + 1)
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
+            break
 
-    def _evaluate_loop(self, input_fn, **kwargs):
-        metricContainer = MetricContainer(["loss"])
+    def evaluate_loop(self, input_fn, **kwargs):
+        metricContainer = MetricContainer(self.metrics)
         self.model.eval()
 
-        for idx, (name, i) in iterator(enumerate(input_fn), 20):
-            i = i.cuda()
-            out = self.model(i)
-            loss = self.criterion(out, i)
-            metricContainer.loss.update(loss.item(), 1)
+        for idx, (name, i, targets) in iterator(enumerate(input_fn), 20):
+            i = torch.stack(i).cuda()
+            out = self.model(i, targets=targets)
+            # loss = self.criterion(out, i)
+            # metricContainer.loss.update(loss.item(), 1)
         return metricContainer
 
     # def export_model(self, **kwargs):
@@ -116,7 +114,6 @@ class Experiment(BaseTorchExperimentABC):
 
 
 def add_version(name, dataset, flat, used_labels):
-    print("*"*10, name)
     v.add_version(name,
                   dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
                                                        datasets=Datasets("../data/generated/rico_temp.json",
@@ -125,7 +122,7 @@ def add_version(name, dataset, flat, used_labels):
                                                                          validation_size=0,
                                                                          used_labels=used_labels),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels),
-                                                       batch_size=100),
+                                                       batch_size=1),
                   epocs=75,
                   num_classes=len(used_labels),
                   )
@@ -133,5 +130,5 @@ def add_version(name, dataset, flat, used_labels):
 
 
 v = Versions()
-add_version("r1", SemanticConvModelDataSet, flat=False, used_labels=load_semantic_labels("../data/generated/semnantic_colors.json"))
+add_version("r1", ObjectDetectionModelDataSet, flat=False, used_labels=load_semantic_classes("../data/generated/semnantic_colors.json"))
 EXPERIMENT = Experiment(v, allow_delete_experiment_dir=True)
