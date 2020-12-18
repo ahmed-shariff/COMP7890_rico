@@ -138,8 +138,10 @@ class ObjectDetectionModelDataSet(SemanticConvModelDataSet):
         boxes = []
         labels = []
         for view in entry["semantic_data"]:
-            boxes.append((torch.tensor(view["bounds"]) / 10).round().type(torch.int64))
-            labels.append(self._used_labels[view["componentLabel"]])
+            _boxes = (torch.tensor(view["bounds"]) / 10).round().type(torch.int64)
+            if _boxes[2] - _boxes[0] > 0 and _boxes[3] - _boxes[1] > 0:
+                boxes.append(_boxes)
+                labels.append(self._used_labels[view["componentLabel"]])
             # x1, y1, x2, y2 = (torch.tensor(view["bounds"]) / 10).round().type(torch.int32)
             # img = self._assign_area(img, view, x1, y1, x2, y2, True)
             # print(x1, y1, x2, y2)
