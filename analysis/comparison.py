@@ -15,9 +15,15 @@ set_logger()
 
 export_dirs = [
     # "linear-flat",
-    "linear-non-flat",
+    # "linear-non-flat",
     # "conv-flat",
     # "conv-non-flat",
+    "conv-flat",
+    "conv-flat-semantic",
+    "conv-non-flat",
+    "conv-non-flat-semantic",
+    "linear-flat",
+    "linear-non-flat",
 ]
 
 def main():
@@ -29,13 +35,13 @@ def main():
 
         _compare_data(ui_layout_vector, train_data, root_dir)
 
-    print("**********************************************************\n")
-    print(f"{export_roots[0]} -> {export_roots[1]}")
-    _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), export_roots[1])
+    # print("**********************************************************\n")
+    # print(f"{export_roots[0]} -> {export_roots[1]}")
+    # _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), export_roots[1])
 
-    print("**********************************************************\n")
-    print(f"{export_roots[1]} -> {export_roots[0]}")
-    _compare_data(get_trained_data(export_roots[1]), get_trained_data(export_roots[0]), export_roots[0])
+    # print("**********************************************************\n")
+    # print(f"{export_roots[1]} -> {export_roots[0]}")
+    # _compare_data(get_trained_data(export_roots[1]), get_trained_data(export_roots[0]), export_roots[0])
 
     # for name, idx in ui_layout_vector.name_to_idx:
     #     print(name, idx)
@@ -47,15 +53,15 @@ def _compare_data(gt_data, predicted_data, root_dir):
     # comparator = CCAComparison()
     # sim = comparator.run_comparison(train_data.vectors[:50], ui_layout_vector.vectors[:50])
     # print(sim)
-    if "conv" in str(root_dir):
-        n_proc = 2
-    else:
-        n_proc = 7
+    # if "conv" in str(root_dir):
+    #     n_proc = 2
+    # else:
+    n_proc = 7
     with multiprocessing.Pool(n_proc) as p:
-        if "conv" in str(root_dir):
-            map_fn = lambda p, i: map(p, i)
-        else:
-            map_fn = lambda pr, i: p.imap_unordered(pr, i, chunksize=100)
+        # if "conv" in str(root_dir):
+        #     map_fn = lambda p, i: map(p, i)
+        # else:
+        map_fn = lambda pr, i: p.imap_unordered(pr, i, chunksize=100)
 
         print(map_fn, n_proc)
         for out in tqdm(map_fn(_process(predicted_data, gt_data), iterator(predicted_data.name_to_idx.items(), None)), total=len(predicted_data.name_to_idx)):
@@ -81,12 +87,12 @@ class _process:
 
     def __call__(self, x):
         name, idx = x
-        train_d, train_i = self.train_data.tree.query([self.train_data.vectors[idx]], k=20)
+        train_d, train_i = self.train_data.tree.query([self.train_data.vectors[idx]], k=30)
         train_results = [self.train_data.idx_to_name[i] for i in train_i[0]]
 
         try:
             ui_idx = self.ui_layout_vector.name_to_idx[name]
-            ui_d, ui_i= self.ui_layout_vector.tree.query([self.ui_layout_vector.vectors[ui_idx]], k=20)
+            ui_d, ui_i= self.ui_layout_vector.tree.query([self.ui_layout_vector.vectors[ui_idx]], k=30)
             ui_results = [self.ui_layout_vector.idx_to_name[i] for i in ui_i[0]]
             # print("ui")
             # _display_images(name, *ui_results)
