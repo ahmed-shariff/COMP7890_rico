@@ -21,10 +21,11 @@ FLAT_USED_LABELS = {"None": 0, "text-component": 127, "component": 255}
 
 
 class RicoDataSetABC(DatasetBasicABC):
-    def __init__(self, used_labels, flat=True, *args, **kwargs):
+    def __init__(self, used_labels, flat=True, return_img=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.flat = flat
         self._used_labels = used_labels
+        self.return_img = return_img
 
     def _assign_area(self, img, view, x1, y1, x2, y2, rectangle=False):
         if not rectangle:
@@ -63,6 +64,10 @@ class ConvModelDataSet(FlatRicolDataSet):
 
         # cv2.imshow("", img)
         # cv2.waitKey()
+        if self.return_img:
+            original_img = cv2.imread("../data/" + entry["screenshot"])
+            original_img = cv2.resize(original_img, (144, 256))
+            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), torchvision.transforms.functional.to_tensor(original_img)
         return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
 
 
@@ -98,6 +103,10 @@ class SemanticConvModelDataSet(RicoDataSetABC):
 
         # cv2.imshow("", img)
         # cv2.waitKey()
+        if self.return_img:
+            original_img = cv2.imread("../data/" + entry["screenshot"])
+            original_img = cv2.resize(original_img, (144, 256))
+            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), torchvision.transforms.functional.to_tensor(original_img)
         return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
     
 
