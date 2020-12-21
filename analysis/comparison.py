@@ -10,6 +10,7 @@ from mlpipeline.utils import set_logger
 from tqdm import tqdm
 from repcomp.comparison import CCAComparison, NeighborsComparison
 import multiprocessing
+import itertools
 
 set_logger()
 
@@ -18,23 +19,26 @@ export_dirs = [
     # "linear-non-flat",
     # "conv-flat",
     # "conv-non-flat",
-    "conv-flat",
-    "conv-flat-semantic",
-    "conv-non-flat",
-    "conv-non-flat-semantic",
-    "linear-flat",
-    "linear-non-flat",
+    "conv-flat",  # 0
+    "conv-flat-semantic",  # 1
+    "conv-non-flat",  # 2
+    "conv-non-flat-semantic",  # 3
+    "linear-flat",  # 4
+    "linear-non-flat",  # 5
+    "img-conv-non-flat-semantic"  # 6
 ]
 
 def main():
-    export_roots = [Path("../exports") / d for d in export_dirs]
+    export_roots = EasyDict({d.replace("-", "_"): Path("../exports") / d for d in export_dirs})
     
-    for root_dir in export_roots:  # (export_roots[2], ):
+    for root_dir in export_roots.values():  # (export_roots[2], ):
+        print("gt: ui     pred: ", root_dir)
         train_data = get_trained_data(root_dir)
         ui_layout_vector = get_ui_layout(train_data)
 
-        _compare_data(ui_layout_vector, train_data, root_dir)
-
+        _compare_data(ui_layout_vector, train_data)
+        print("------ \n")
+        
     # print("**********************************************************\n")
     # print(f"{export_roots[0]} -> {export_roots[1]}")
     # _compare_data(get_trained_data(export_roots[0]), get_trained_data(export_roots[1]), export_roots[1])
@@ -47,8 +51,29 @@ def main():
     #     print(name, idx)
     #     break
 
+    # \item Distinguishing elements between text and non-text as done by Deka et. al \cite{deka17_rico}.
+    # \item Using linear models vs convolutional models.
+    for i1, i2 in itertools.combinations([export_roots.linear_flat, export_roots.linear_non_flat, export_roots.conv_flat, export_roots.conv_non_flat], 2):
+        _compare_pair(i1, i2)
+    
+    # \item Using representations of basic elements (text/non-text) vs using the semantified representations
+    _compare_pair(export_roots.conv_flat, export_roots.conv_flat_semantic)
+    _compare_pair(export_roots.conv_non_flat, export_roots.conv_flat_semantic)
+    _compare_pair(export_roots.conv_flat, export_roots.conv_non_flat_semantic)
+    _compare_pair(export_roots.conv_non_flat, export_roots.conv_non_flat_semantic)
+    
+    # \item Using the classification of ``Text Button'' classes and ``Icon'' classes vs not using them.
+    _compare_pair(export_roots.conv_non_flat_semantic, export_roots.conv_flat_semantic)
+    
+    # \item Using screenshots instead of UI layout representations.
+    _compare_pair(export_roots.conv_non_flat_semantic, export_roots.img_conv_non_flat_semantic)
 
-def _compare_data(gt_data, predicted_data, root_dir):
+def _compare_pair(gt, pred):
+    print("gt:", gt, "    pred", pred)
+    _compare_data(get_trained_data(gt), get_trained_data(pred))
+    print("------\n")
+
+def _compare_data(gt_data, predicted_data, root_dir=None):
     mc = MetricContainer(["precision", "recall", "dcg", "skipped"])
     # comparator = CCAComparison()
     # sim = comparator.run_comparison(train_data.vectors[:50], ui_layout_vector.vectors[:50])
@@ -87,12 +112,12 @@ class _process:
 
     def __call__(self, x):
         name, idx = x
-        train_d, train_i = self.train_data.tree.query([self.train_data.vectors[idx]], k=30)
+        train_d, train_i = self.train_data.tree.query([self.train_data.vectors[idx]], k=100)
         train_results = [self.train_data.idx_to_name[i] for i in train_i[0]]
 
         try:
             ui_idx = self.ui_layout_vector.name_to_idx[name]
-            ui_d, ui_i= self.ui_layout_vector.tree.query([self.ui_layout_vector.vectors[ui_idx]], k=30)
+            ui_d, ui_i= self.ui_layout_vector.tree.query([self.ui_layout_vector.vectors[ui_idx]], k=100)
             ui_results = [self.ui_layout_vector.idx_to_name[i] for i in ui_i[0]]
             # print("ui")
             # _display_images(name, *ui_results)
