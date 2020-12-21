@@ -87,6 +87,34 @@ class ExperimentImg(Experiment):
             metricContainer.loss.update(loss.item(), 1)
         return metricContainer
 
+    def post_execution_hook(self, mode, **kwargs):
+        self.model.eval()
+        out_location = Path("../exports") / self.current_version.name
+
+        if not out_location.exists():
+            out_location.mkdir(parents=True)
+
+        self.copy_related_files(out_location)
+            
+        self.log("Exporting data to : " + str(out_location))
+        torch.save({"state_dict": self.model.state_dict()}, out_location / "model.tch")
+
+        self.log("Encoding train data")
+        train_encodings = {}
+        for name, i, oi in tqdm(iterator(self.dataloader.get_train_input(mode=ExecutionModeKeys.TEST), 1), total=self.dataloader.get_train_sample_count()):
+            train_encodings[name] = self.model.encode(oi.cuda()).cpu().detach().numpy()
+
+        with open(out_location / "train_encodings.npy", "wb") as f:
+            np.save(f, train_encodings)
+
+        self.log("Encoding test data")
+        test_encodings = {}
+        for name, i, oi in tqdm(iterator(self.dataloader.get_test_input(mode=ExecutionModeKeys.TEST), 1), total=self.dataloader.get_test_sample_count()):
+            test_encodings[name] = self.model.encode(oi.cuda()).cpu().detach().numpy()
+
+        with open(out_location / "test_encodings.npy", "wb") as f:
+            np.save(f, test_encodings)
+
 
 def add_version(name, model, dataset, flat, used_labels):
     v.add_version(name,

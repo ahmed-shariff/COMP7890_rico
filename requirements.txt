@@ -1,3 +1,6 @@
+mlflow
+easydict
 mlpipeline
 opencv-python
 tqdm
+scikit-image

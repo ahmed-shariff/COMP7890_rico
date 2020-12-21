@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import random
 import cv2
+from skimage import io, transform
 import torchvision
 import torch
 import json
@@ -65,9 +66,18 @@ class ConvModelDataSet(FlatRicolDataSet):
         # cv2.imshow("", img)
         # cv2.waitKey()
         if self.return_img:
-            original_img = cv2.imread("../data/" + entry["screenshot"])
-            original_img = cv2.resize(original_img, (144, 256))
-            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), torchvision.transforms.functional.to_tensor(original_img)
+            # original_img = cv2.imread("../data/" + entry["screenshot"])
+            # original_img = cv2.resize(original_img, (256, 144))
+            # original_img = torchvision.transforms.functional.to_tensor(original_img)
+            
+            # original_img = io.imread("../data/" + entry["screenshot"])
+            # original_img = transform.resize(original_img, (256, 144))
+            # original_img = torchvision.transforms.functional.to_tensor(original_img).float()
+            
+            original_img = torchvision.io.read_image("../data/" + entry["screenshot"])/255
+            original_img = torchvision.transforms.functional.resize(original_img, (256, 144))
+
+            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), original_img
         return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
 
 
@@ -104,9 +114,18 @@ class SemanticConvModelDataSet(RicoDataSetABC):
         # cv2.imshow("", img)
         # cv2.waitKey()
         if self.return_img:
-            original_img = cv2.imread("../data/" + entry["screenshot"])
-            original_img = cv2.resize(original_img, (144, 256))
-            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), torchvision.transforms.functional.to_tensor(original_img)
+            # original_img = cv2.imread("../data/" + entry["screenshot"])
+            # original_img = cv2.resize(original_img, (256, 144))
+            # original_img = torchvision.transforms.functional.to_tensor(original_img)
+            
+            # original_img = io.imread("../data/" + entry["screenshot"])
+            # original_img = transform.resize(original_img, (256, 144))
+            # original_img = torchvision.transforms.functional.to_tensor(original_img).float()
+            
+            original_img = torchvision.io.read_image("../data/" + entry["screenshot"])/255
+            original_img = torchvision.transforms.functional.resize(original_img, (256, 144))
+
+            return entry["screenshot"], torchvision.transforms.functional.to_tensor(img), original_img
         return entry["screenshot"], torchvision.transforms.functional.to_tensor(img)
     
 
@@ -178,7 +197,7 @@ def load_data(data_path):
     return pd.read_json(data_path), []
 
 
-def imshow_tensor(t, in_shape):
+def imshow_tensor(t, in_shape, duration=10):
     if len(t.shape) != 4:    
         t = t.view(-1, 128, 72)
 
@@ -191,7 +210,7 @@ def imshow_tensor(t, in_shape):
     img = [(torchvision.transforms.functional.to_pil_image(t[_t])) for _t in choices]
     img = np.concatenate(img, axis=1)
     cv2.imshow("", img)
-    cv2.waitKey(10)
+    cv2.waitKey(duration)
 
 
 def load_semantic_labels(path):
