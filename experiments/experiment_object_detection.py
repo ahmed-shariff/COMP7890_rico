@@ -21,7 +21,7 @@ class Experiment(BaseTorchExperimentABC):
     def setup_model(self):
         super().setup_model()
         self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained_backbone=True, num_classes=self.current_version.num_classes)
-        self.metrics = ['loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg']
+        self.metrics = ['loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg', "loss"]
 
         # pre-execution hook?
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
@@ -42,10 +42,9 @@ class Experiment(BaseTorchExperimentABC):
 
         self.model.train()
 
-
-        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 2):
+        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 1):
             metricContainer.reset_epoch()
-            for idx, (name, i, targets) in iterator(enumerate(input_fn), 200):
+            for idx, (name, i, targets) in iterator(enumerate(input_fn), 2000):
                 i = torch.stack(i).cuda()
                 out = self.model(i, targets=targets)
                 loss = sum(list(out.values()))
@@ -54,7 +53,8 @@ class Experiment(BaseTorchExperimentABC):
                 self.optimizer.step()
 
                 metricContainer.update({k: v.item() for k, v in out.items()}, 1)
-
+                metricContainer.loss.update(loss.item(), 1)
+                
                 if idx % 100 == 0:
                     out_string_step = "Epoch: {}  Step: {}".format(
                         epoch + 1,
@@ -64,8 +64,10 @@ class Experiment(BaseTorchExperimentABC):
                     metricContainer.log_metrics(log_to_file=False)
                     metricContainer.reset()
 
-            if epoch % 5 == 0:
-                self.save_checkpoint(epoch)
+                if idx % 6000 == 0:
+                    self.save_checkpoint(epoch)
+                    
+            self.save_checkpoint(epoch)
 
             self.log("=========== Epoch Stats: ===========", log_to_file=False)
             self.log(out_string_step, log_to_file=True)
@@ -77,18 +79,19 @@ class Experiment(BaseTorchExperimentABC):
                                         step=epoch + 1)
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
-            break
 
-    def evaluate_loop(self, input_fn, **kwargs):
-        metricContainer = MetricContainer(self.metrics)
-        self.model.eval()
+    # def _evaluate_loop(self, input_fn, **kwargs):
+    #     metricContainer = MetricContainer(self.metrics)
+    #     self.model.eval()
 
-        for idx, (name, i, targets) in iterator(enumerate(input_fn), 20):
-            i = torch.stack(i).cuda()
-            out = self.model(i, targets=targets)
-            # loss = self.criterion(out, i)
-            # metricContainer.loss.update(loss.item(), 1)
-        return metricContainer
+    #     for idx, (name, i, targets) in iterator(enumerate(input_fn), 1):
+    #         i = torch.stack(i).cuda()
+    #         out = self.model(i, targets=targets)
+    #         print(targets)
+    #         print(out)
+    #         # loss = self.criterion(out, i)
+    #         # metricContainer.loss.update(loss.item(), 1)
+    #     return metricContainer
 
     # def export_model(self, **kwargs):
     #     pass
@@ -96,7 +99,7 @@ class Experiment(BaseTorchExperimentABC):
     # def _export_model(self, export_dir):
     #     pass
 
-    def _post_execution_hook(self, mode, **kwargs):
+    def post_execution_hook(self, mode, **kwargs):
         self.model.eval()
         out_location = Path("../exports") / self.current_version.name
 
@@ -116,14 +119,14 @@ class Experiment(BaseTorchExperimentABC):
 def add_version(name, dataset, flat, used_labels):
     v.add_version(name,
                   dataloader=DataLoaderCallableWrapper(BaseTorchDataLoader,
-                                                       datasets=Datasets("../data/generated/rico_temp.json",
+                                                       datasets=Datasets("../data/generated/rico.json",
                                                                          train_data_load_function=load_data,
                                                                          test_size=0.1,
                                                                          validation_size=0,
                                                                          used_labels=used_labels),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels),
-                                                       batch_size=1),
-                  epocs=75,
+                                                       batch_size=3),
+                  epocs=5,
                   num_classes=len(used_labels),
                   )
 

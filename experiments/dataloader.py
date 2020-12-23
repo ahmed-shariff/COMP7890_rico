@@ -192,9 +192,26 @@ class ObjectDetectionModelDataSet(SemanticConvModelDataSet):
     def collate_fn(self, batch):
         return list(zip(*batch))
 
+
+def verify_row(row):
+    if len(row) == 0:
+        return False
+    boxes = []
+    for view in row:
+        _boxes = (np.array(view["bounds"]) / 10).round().astype(np.int32)
+        if _boxes[2] - _boxes[0] > 0 and _boxes[3] - _boxes[1] > 0:
+            boxes.append(_boxes)
+    if len(boxes) == 0:
+        return False
+    return True
+            
     
 def load_data(data_path):
-    return pd.read_json(data_path), []
+    data = pd.read_json(data_path)
+    data["valid_row"] = data["semantic_data"].apply(verify_row)
+    log("Dropped number of rows (empty semantic_data): {}".format((~data["valid_row"]).sum()))
+    data = data[data["valid_row"]]
+    return data, []
 
 
 def imshow_tensor(t, in_shape, duration=10):
