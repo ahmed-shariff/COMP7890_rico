@@ -15,6 +15,7 @@ from dataloader import (ObjectDetectionModelDataSet,
                         load_data,
                         imshow_tensor,
                         load_semantic_classes)
+import traceback
 
 
 class Experiment(BaseTorchExperimentABC):
@@ -38,20 +39,30 @@ class Experiment(BaseTorchExperimentABC):
         if epochs_end < 1:
             epochs_end = 1
 
-        self.log("Remaining epochs: {}".format(epochs_end))
+        self.log("Remaining epochs: {}".format(epochs_end), log_to_file=True)
+        self.log("Steps per epoch: {}".format(len(input_fn)), log_to_file=True)
 
         self.model.train()
 
         for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 1):
             metricContainer.reset_epoch()
-            for idx, (name, i, targets) in iterator(enumerate(input_fn), 2000):
+            epoch_misses = 0
+            for idx, (name, i, targets) in iterator(enumerate(input_fn), 2):
                 i = torch.stack(i).cuda()
-                out = self.model(i, targets=targets)
-                loss = sum(list(out.values()))
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-
+                try:
+                    out = self.model(i, targets=targets)
+                    loss = sum(list(out.values()))
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                except RuntimeError as e:
+                    tb = traceback.format_exc()
+                    self.log(f"Failed step: RuntimeError {e}", level=40, log_to_file=True)  # error
+                    self.log(f"traceback: \n {tb}", level=40, log_to_file=True)
+                    self.log("Error happened with \nnames:{name}".format(name=name), level=40, log_to_file=True)
+                    self.log("Lengths: {}".format([len(el["boxes"]) for el in targets]), level=40, log_to_file=True)
+                    epoch_misses += 1
+                
                 metricContainer.update({k: v.item() for k, v in out.items()}, 1)
                 metricContainer.loss.update(loss.item(), 1)
                 
@@ -64,7 +75,7 @@ class Experiment(BaseTorchExperimentABC):
                     metricContainer.log_metrics(log_to_file=False)
                     metricContainer.reset()
 
-                if idx % 6000 == 0:
+                if idx % 6000 == 0 and idx > 0:
                     self.save_checkpoint(epoch)
                     
             self.save_checkpoint(epoch)
@@ -77,6 +88,8 @@ class Experiment(BaseTorchExperimentABC):
                                         items_per_row=5,
                                         charachters_per_row=100,
                                         step=epoch + 1)
+            if epoch_misses > 0:
+                self.log(f"steps missed: {epoc_misses}", log_to_file=True)
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
 
@@ -125,13 +138,13 @@ def add_version(name, dataset, flat, used_labels):
                                                                          validation_size=0,
                                                                          used_labels=used_labels),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels),
-                                                       batch_size=3),
-                  epocs=5,
+                                                       batch_size=4),
+                  epocs=25,
                   num_classes=len(used_labels),
                   )
 
 
 
 v = Versions()
-add_version("r1", ObjectDetectionModelDataSet, flat=False, used_labels=load_semantic_classes("../data/generated/semnantic_colors.json"))
+add_version("r2", ObjectDetectionModelDataSet, flat=False, used_labels=load_semantic_classes("../data/generated/semnantic_colors.json"))
 EXPERIMENT = Experiment(v, allow_delete_experiment_dir=True)
