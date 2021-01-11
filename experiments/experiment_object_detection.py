@@ -47,13 +47,19 @@ class Experiment(BaseTorchExperimentABC):
         for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 1):
             metricContainer.reset_epoch()
             epoch_misses = 0
-            for idx, (name, i, targets) in iterator(enumerate(input_fn), 2):
+            for idx, (name, i, targets) in iterator(enumerate(input_fn), 20):
                 i = torch.stack(i).cuda()
                 try:
                     out = self.model(i, targets=targets)
                     loss = sum(list(out.values()))
                     self.optimizer.zero_grad()
                     loss.backward()
+
+                    if loss.item() > 50:
+                        val = loss.detach().item()
+                        self.log("loss over threshold, breaking: {}".format(val), level=40, log_to_file=True)
+                        epoch_misses += 1
+                        continue
                     self.optimizer.step()
                 except RuntimeError as e:
                     tb = traceback.format_exc()
@@ -66,13 +72,14 @@ class Experiment(BaseTorchExperimentABC):
                 metricContainer.update({k: v.item() for k, v in out.items()}, 1)
                 metricContainer.loss.update(loss.item(), 1)
                 
-                if idx % 100 == 0:
+                if idx % 500 == 0:
+                    step = epoch * self.dataloader.get_train_sample_count() + idx
                     out_string_step = "Epoch: {}  Step: {}".format(
                         epoch + 1,
                         idx + 1)
                     self.log("----------------------", log_to_file=False)
                     self.log(out_string_step, log_to_file=False)
-                    metricContainer.log_metrics(log_to_file=False)
+                    metricContainer.log_metrics(log_to_file=True, step=step)
                     metricContainer.reset()
 
                 if idx % 6000 == 0 and idx > 0:
@@ -81,15 +88,19 @@ class Experiment(BaseTorchExperimentABC):
             self.save_checkpoint(epoch)
 
             self.log("=========== Epoch Stats: ===========", log_to_file=False)
+            out_string_step = "Epoch: {}  Step: {}".format(
+                epoch + 1,
+                idx + 1)
             self.log(out_string_step, log_to_file=True)
             metricContainer.log_metrics(metrics=None,
                                         log_to_file=True,
                                         complete_epoch=True,
                                         items_per_row=5,
                                         charachters_per_row=100,
+                                        name_prefix="epoch_",
                                         step=epoch + 1)
             if epoch_misses > 0:
-                self.log(f"steps missed: {epoc_misses}", log_to_file=True)
+                self.log(f"steps missed: {epoch_misses}", log_to_file=True)
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
 
@@ -139,12 +150,12 @@ def add_version(name, dataset, flat, used_labels):
                                                                          used_labels=used_labels),
                                                        pytorch_dataset_factory=DatasetFactory(dataset, used_labels=used_labels),
                                                        batch_size=4),
-                  epocs=25,
+                  epocs=15,
                   num_classes=len(used_labels),
                   )
 
 
 
 v = Versions()
-add_version("r2", ObjectDetectionModelDataSet, flat=False, used_labels=load_semantic_classes("../data/generated/semnantic_colors.json"))
-EXPERIMENT = Experiment(v, allow_delete_experiment_dir=True)
+add_version("r3", ObjectDetectionModelDataSet, flat=False, used_labels=load_semantic_classes("../data/generated/semnantic_colors.json"))
+EXPERIMENT = Experiment(v, allow_delete_experiment_dir=False)
