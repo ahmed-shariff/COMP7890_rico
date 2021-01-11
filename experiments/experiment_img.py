@@ -38,9 +38,12 @@ class ExperimentImg(Experiment):
         self.model.train()
 
 
-        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 2):
+        for epoch in iterator(range(self.epochs_params, self.epochs_params + epochs_end), 1):
             metricContainer.reset_epoch()
-            for idx, (name, i, oi) in iterator(enumerate(input_fn), 200):
+            import time
+            ti = time.time()
+            for idx, (name, i, oi) in iterator(enumerate(input_fn), 20):
+                # print(ti - time.time())
                 i = i.cuda()
                 oi = oi.cuda()
                 out = self.model(oi)
@@ -60,6 +63,7 @@ class ExperimentImg(Experiment):
                     self.log(out_string_step, log_to_file=False)
                     metricContainer.log_metrics(log_to_file=False)
                     metricContainer.reset()
+                ti = time.time()
 
             if epoch % 5 == 0:
                 self.save_checkpoint(epoch)
