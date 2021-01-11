@@ -214,22 +214,6 @@ def load_data(data_path):
     return data, []
 
 
-def imshow_tensor(t, in_shape, duration=10):
-    if len(t.shape) != 4:    
-        t = t.view(-1, 128, 72)
-
-    # img = random.choices([(_t.cpu().detach().numpy() * 255).clip(0, 255).astype(np.uint8).squeeze() for _t in t], k=5)
-    
-    # print(np.asarray(torchvision.transforms.functional.to_pil_image(t[0])).max())
-    # cv2.imshow("", np.asarray(torchvision.transforms.functional.to_pil_image(t[0])))
-    # cv2.waitKey()
-    choices = random.choices(list(range(in_shape[0])), k=5)
-    img = [(torchvision.transforms.functional.to_pil_image(t[_t])) for _t in choices]
-    img = np.concatenate(img, axis=1)
-    cv2.imshow("", img)
-    cv2.waitKey(duration)
-
-
 def load_semantic_labels(path):
     with open(path) as f:
         labels = json.load(f)

@@ -13,9 +13,12 @@ import numpy as np
 import shutil
 from dataloader import (ObjectDetectionModelDataSet,
                         load_data,
-                        imshow_tensor,
                         load_semantic_classes)
 import traceback
+
+from utils import imshow_tensor, visualize_objects
+
+PRE_TRAINED_MODEL = "../data/pretrained_models/experiment_object_detection-r1/model_params0.tch"
 
 
 class Experiment(BaseTorchExperimentABC):
@@ -26,6 +29,11 @@ class Experiment(BaseTorchExperimentABC):
 
         # pre-execution hook?
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
+
+        self.log(f"Loading state dict from {PRE_TRAINED_MODEL}")
+        trained_data = torch.load(PRE_TRAINED_MODEL)
+        self.model.load_state_dict(trained_data["state_dict"])
+        self.log("Done loading state dict")
         
         self.model = self.model.cuda()
         self.lr_scheduler = None
@@ -104,18 +112,21 @@ class Experiment(BaseTorchExperimentABC):
             self.log("=========== Epoch Ends =============", log_to_file=False)
             metricContainer.reset_epoch()
 
-    # def _evaluate_loop(self, input_fn, **kwargs):
-    #     metricContainer = MetricContainer(self.metrics)
-    #     self.model.eval()
+    def evaluate_loop(self, input_fn, **kwargs):
+        metricContainer = MetricContainer(self.metrics)
+        self.model.eval()
+        self.model.cpu()
 
-    #     for idx, (name, i, targets) in iterator(enumerate(input_fn), 1):
-    #         i = torch.stack(i).cuda()
-    #         out = self.model(i, targets=targets)
-    #         print(targets)
-    #         print(out)
-    #         # loss = self.criterion(out, i)
-    #         # metricContainer.loss.update(loss.item(), 1)
-    #     return metricContainer
+        for idx, (name, i, targets) in iterator(enumerate(input_fn), 150):
+            i = torch.stack(i) # .cuda()
+            out = self.model(i)  # , targets=targets)
+            print(targets)
+            print(out)
+            # imshow_tensor(i, i.shape, k=1)
+            visualize_objects(name, i, out, targets)
+            # loss = self.criterion(out, i)
+            # metricContainer.loss.update(loss.item(), 1)
+        return metricContainer
 
     # def export_model(self, **kwargs):
     #     pass
