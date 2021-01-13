@@ -3,7 +3,7 @@ import torchvision
 import random
 import numpy as np
 
-def visualize_objects(names, t, out, targets):
+def visualize_objects(names, t, out, targets, display_time=None):
     img = np.array(torchvision.transforms.functional.to_pil_image(t[0]))
     boxes = out[0]["boxes"].round().cpu().detach().numpy().astype(np.int64) * 10
     labels = out[0]["labels"].cpu().detach().numpy()
@@ -11,14 +11,15 @@ def visualize_objects(names, t, out, targets):
     name = names[0]
     img = cv2.resize(cv2.imread(f"../data/{name}"), (1440, 2560))
     img_2 = img.copy()
-    for x1, y1, x2, y2 in boxes[scores]:
+    for x1, y1, x2, y2 in boxes[scores.cpu().numpy()]:
         cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 10)
 
     for x1, y1, x2, y2 in targets[0]["boxes"].cpu().numpy() * 10:
         cv2.rectangle(img_2, (x1, y1), (x2, y2), (0, 0, 255), 10)
 
     img = np.concatenate((img, img_2), axis=1)
-    # _display_img(img, 2000)
+    if display_time is not None:
+        _display_img(cv2.resize(img, (576, 512)), display_time)
     cv2.imwrite("outputs/images/" + name.split("/")[-1], img)
     
 
