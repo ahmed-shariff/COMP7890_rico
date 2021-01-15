@@ -43,6 +43,9 @@ class Experiment(BaseTorchExperimentABC):
         super().pre_execution_hook(**kwargs)
         self.save_history_checkpoints_count = 30
         self.log(f"Setting History Checkpoints to {self.save_history_checkpoints_count}")
+        self.labels_to_class = {v:k for k,v in self.current_version.used_labels.items()}
+        self.colors = np.random.uniform(0, 200, size=(len(self.labels_to_class), 3)).astype(np.int32).tolist()
+
 
     def train_loop(self, input_fn, **kwargs):
         metricContainer = MetricContainer(self.metrics)
@@ -94,7 +97,7 @@ class Experiment(BaseTorchExperimentABC):
                     i = i[:1]
                     targets = targets[:1]
                     out = self.model(i)
-                    visualize_objects(name, i, out, targets, 10)
+                    visualize_objects(name, i, out, targets, 10, labels_to_class=self.labels_to_class, colors=self.colors)
                     self.model.train()
                 
                 if idx % 500 == 0:
@@ -137,13 +140,13 @@ class Experiment(BaseTorchExperimentABC):
         self.model.eval()
         self.model.cpu()
 
-        for idx, (name, i, targets) in iterator(enumerate(input_fn), 150):
+        for idx, (name, i, targets) in tqdm(iterator(enumerate(input_fn), 150)):
             i = torch.stack(i) # .cuda()
             out = self.model(i)  # , targets=targets)
-            print(targets)
-            print(out)
+            # print(targets)
+            # print(out)
             # imshow_tensor(i, i.shape, k=1)
-            visualize_objects(name, i, out, targets, 10)
+            visualize_objects(name, i, out, targets, 10, labels_to_class=self.labels_to_class, colors=self.colors)
             # loss = self.criterion(out, i)
             # metricContainer.loss.update(loss.item(), 1)
         return metricContainer
@@ -188,6 +191,7 @@ def add_version(name, dataset, flat, used_labels):
                   num_classes=len(used_labels),
                   generate_images=False,
                   pretrained_model=None,
+                  used_labels=used_labels
                   )
 
 
